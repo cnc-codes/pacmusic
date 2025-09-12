@@ -18,27 +18,44 @@ jobs:
           APP_PATH: ${{ secrets.APP_PATH }}
           GIT_URL: ${{ secrets.GIT_URL }}
           APP_PORT: ${{ secrets.APP_PORT }}
+          MINIO_STG_ACCESS_KEY: ${{ secrets.MINIO_STG_ACCESS_KEY }}
+          MINIO_STG_SECRET_KEY: ${{ secrets.MINIO_STG_SECRET_KEY }}
+          MINIO_STG_ENDPOINT: ${{ secrets.MINIO_STG_ENDPOINT }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: APP_PATH, GIT_URL, APP_PORT
+          envs: APP_PATH, GIT_URL, APP_PORT, MINIO_STG_ACCESS_KEY, MINIO_STG_SECRET_KEY, MINIO_STG_ENDPOINT
           script: |
             echo "🚀 Starting PacMusic Staging Deployment..."
 
+            # Create ~/.ssh if not exists
+            mkdir -p ~/.ssh
+
+            # Add GitHub to known_hosts
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+
             # Clone or update repository
-            if [[ -d "${APP_PATH}" ]]; then
-              cd $APP_PATH
+            if [[ -d "${APP_PATH}/pacmusic" ]]; then
+              cd $APP_PATH/pacmusic
               docker compose down
               git pull --rebase
             else
-              ssh-keyscan github.com > ~/.ssh/known_hosts
-              git clone $GIT_URL $APP_PATH
-              cd $APP_PATH
+              git clone $GIT_URL $APP_PATH/pacmusic
+              cd $APP_PATH/pacmusic
+            fi
+
+            # Ensure docker-compose.yml exists
+            if [[ ! -f "docker-compose.yml" ]]; then
+              echo "❌ docker-compose.yml not found in $APP_PATH/pacmusic"
+              exit 1
             fi
 
             # Update .env file for staging
             echo "APP_PORT=$APP_PORT" > .env
+            echo "MINIO_STG_ACCESS_KEY=$MINIO_STG_ACCESS_KEY" >> .env
+            echo "MINIO_STG_SECRET_KEY=$MINIO_STG_SECRET_KEY" >> .env
+            echo "MINIO_STG_ENDPOINT=$MINIO_STG_ENDPOINT" >> .env
 
             # Build and run PacMusic staging container
             docker compose up pacmusic-stg --build --detach
@@ -51,6 +68,11 @@ jobs:
               else
                 echo "⏳ Waiting for staging server... ($i/20)"
                 sleep 10
+              fi
+
+              if [[ $i -eq 20 ]]; then
+                echo "❌ Staging server failed to start after 200s"
+                exit 1
               fi
             done
 
@@ -67,5 +89,10 @@ jobs:
             else
               echo "⏳ Waiting for staging endpoint... ($i/20)"
               sleep 10
+            fi
+
+            if [[ $i -eq 20 ]]; then
+              echo "❌ Staging endpoint not reachable after 200s"
+              exit 1
             fi
           done

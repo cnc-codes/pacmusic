@@ -11,7 +11,7 @@ jobs:
     environment: Production
 
     steps:
-      # 1️⃣ Deploy to remote server via SSH
+      # 1️⃣ Deploy to production via SSH
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -23,33 +23,50 @@ jobs:
           APP_TAG: ${{ github.event.release.tag_name }}
           APP_HOST: localhost
           APP_PORT: ${{ secrets.APP_PORT }}
+          MINIO_PROD_ACCESS_KEY: ${{ secrets.MINIO_PROD_ACCESS_KEY }}
+          MINIO_PROD_SECRET_KEY: ${{ secrets.MINIO_PROD_SECRET_KEY }}
+          MINIO_PROD_ENDPOINT: ${{ secrets.MINIO_PROD_ENDPOINT }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: APP_PATH_PROD, GIT_URL, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APP_NAME, APP_TAG, APP_HOST, APP_PORT
+          envs: APP_PATH_PROD, GIT_URL, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APP_NAME, APP_TAG, APP_HOST, APP_PORT, MINIO_PROD_ACCESS_KEY, MINIO_PROD_SECRET_KEY, MINIO_PROD_ENDPOINT
           script: |
             echo "🚀 Starting PacMusic Production Deployment..."
 
-            # Login to Docker Hub
-            sudo docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+            # Create ~/.ssh if not exists
+            mkdir -p ~/.ssh
+
+            # Add GitHub to known_hosts
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
 
             # Clone or update repository
-            if [[ -d "${APP_PATH}" ]]; then 
-              cd $APP_PATH_PROD
+            if [[ -d "${APP_PATH_PROD}/pacmusic" ]]; then
+              cd $APP_PATH_PROD/pacmusic
               sudo docker compose down
               git pull --rebase
             else
-              ssh-keyscan github.com > ~/.ssh/known_hosts
-              git clone $GIT_URL $APP_PATH_PROD
-              cd $APP_PATH_PROD
+              git clone $GIT_URL $APP_PATH_PROD/pacmusic
+              cd $APP_PATH_PROD/pacmusic
             fi
 
-            # Update .env file for docker-compose
+            # Ensure docker-compose.yml exists
+            if [[ ! -f "docker-compose.yml" ]]; then
+              echo "❌ docker-compose.yml not found in $APP_PATH_PROD/pacmusic"
+              exit 1
+            fi
+
+            # Update .env file for production
             echo "APP_IMAGE=${DOCKERHUB_USERNAME}/${APP_NAME}" > .env
             echo "APP_TAG=$APP_TAG" >> .env
             echo "APP_HOST=$APP_HOST" >> .env
-            echo "APP_PROD_PORT=$APP_PORT" >> .env   
+            echo "APP_PROD_PORT=$APP_PORT" >> .env
+            echo "MINIO_PROD_ACCESS_KEY=$MINIO_PROD_ACCESS_KEY" >> .env
+            echo "MINIO_PROD_SECRET_KEY=$MINIO_PROD_SECRET_KEY" >> .env
+            echo "MINIO_PROD_ENDPOINT=$MINIO_PROD_ENDPOINT" >> .env
+
+            # Login to Docker Hub
+            sudo docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
 
             # Pull latest image
             sudo docker pull ${DOCKERHUB_USERNAME}/${APP_NAME}:$APP_TAG
@@ -66,17 +83,6 @@ jobs:
                 echo "⏳ Waiting for production server... ($i/20)"
                 sleep 10
               fi
-            done
 
-      # 2️⃣ Verify Production Endpoint
-      - name: Hit Production Endpoint
-        run: |
-          for i in {1..20}; do
-            if curl -f ${{ secrets.PROD_URL }}; then
-              echo "✅ Production endpoint reachable!"
-              break
-            else
-              echo "⏳ Waiting for production endpoint... ($i/20)"
-              sleep 10
-            fi
-          done
+              if [[ $i -eq 20 ]]; then
+                echo "❌ Production server failed to start after 200s"
