@@ -33,11 +33,11 @@ jobs:
           # Build and run pacmusic-dev service
           sudo docker compose up --build --detach pacmusic-dev
 
-          # Optional: run database and app-dev together
-          sudo docker compose up database app-dev --build --detach
+          # Optional: run and app-dev together
+          sudo docker compose up app-dev --build --detach
 
       # Step 4: Wait for app-dev server to be ready inside container
-      - name: Wait for app-dev server
+      - name: Wait for pacmusic-dev server
         run: |
           for i in {1..20}; do
             if sudo docker exec app-dev curl -f http://localhost:5000; then
