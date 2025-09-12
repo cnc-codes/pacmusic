@@ -1,4 +1,4 @@
-name: Deploy Staging
+name: Deploy Staging 🚀
 
 on:
   push:
@@ -8,10 +8,10 @@ on:
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    environment: staging
+    environment: Staging
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Deploy to Staging
@@ -22,46 +22,49 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
           script: |
             APP_STG_PATH=${{ vars.APP_STG_PATH }}
-            APP_STG_PORT=5001
+            APP_STG_PORT=${{ secrets.APP_STG_PORT }}
 
-            if [[ -d "$APP_STG_PATH" ]]; then
-              cd $APP_STG_PATH
-              sudo docker compose down
+            # Go to the repository folder or clone it if it doesn't exist
+            if [[ -d "$APP_STG_PATH/pacmusic/.git" ]]; then
+              cd $APP_STG_PATH/pacmusic
               git pull --rebase
             else
-              git clone $GIT_URL $APP_STG_PATH
-              cd $APP_STG_PATH
+              # Repository doesn’t exist → clone fresh
+              rm -rf $APP_STG_PATH/pacmusic
+              git clone $GIT_URL $APP_STG_PATH/pacmusic
+              cd $APP_STG_PATH/pacmusic
             fi
 
-            # Dummy .env
-            echo "MINIO_ENDPOINT=dummy" > .env
-            echo "MINIO_ACCESS_KEY=dummy" >> .env
-            echo "MINIO_SECRET_KEY=dummy" >> .env
-            echo "APP_PORT=$APP_STG_PORT" >> .env
+            # Create minimal .env with only APP_STG_PORT
+            echo "APP_PORT=$APP_STG_PORT" > .env
 
-            # Deploy container
-            sudo docker compose up pacmusic-stg --build --detach
+            # Stop the old container if it exists
+            sudo docker compose down || true
 
-            # Wait server
+            # Build the Docker image from Dockerfile and start pacmusic-stg container
+            sudo docker compose up --build --detach pacmusic-stg
+
+            # Wait until the container is running
             for i in {1..20}; do
-              if sudo docker exec pacmusic-stg curl -f http://localhost:$APP_STG_PORT; then
-                echo "✅ Staging server ready"
+              STATUS=$(sudo docker inspect -f '{{.State.Running}}' pacmusic-stg)
+              if [ "$STATUS" = "true" ]; then
+                echo "✅ Container pacmusic-stg is running"
                 break
               else
-                echo "⏳ Waiting... ($i/20)"
+                echo "⏳ Waiting for container... ($i/20)"
                 sleep 5
               fi
             done
 
       - name: Test Staging Endpoint
         run: |
-          STG_IP=${{ secrets.SSH_HOST_STAGING }}
+          STG_URL=${{ secrets.STG_URL }}
           for i in {1..20}; do
-            if curl -f http://$STG_IP >/dev/null 2>&1; then
+            if curl -f $STG_URL >/dev/null 2>&1; then
               echo "✅ Staging endpoint reachable!"
               break
             else
-              echo "⏳ Waiting... ($i/20)"
-              sleep 5
+              echo "⏳ Waiting for endpoint... ($i/20)"
+              sleep 10
             fi
           done
