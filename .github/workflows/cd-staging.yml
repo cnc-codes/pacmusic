@@ -1,0 +1,61 @@
+name: Deploy Staging 🚀
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy-staging:
+    name: Deploy to staging server
+    runs-on: ubuntu-latest
+    environment: Staging
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Deploy to staging via SSH
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_PATH: ${{ vars.APP_PATH }}
+          GIT_URL: ${{ secrets.GIT_URL }}
+          APP_STG_PORT: ${{ secrets.APP_PORT }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: APP_PATH, GIT_URL, APP_STG_PORT
+          script: |
+            # Clone or update repository
+            if [[ -d "${APP_PATH}" ]]; then
+              cd $APP_PATH
+              sudo docker compose down
+              git pull --rebase
+            else
+              ssh-keyscan github.com > ~/.ssh/known_hosts
+              git clone $GIT_URL $APP_PATH
+              cd $APP_PATH
+            fi
+
+            # Build and run PacMusic staging container
+            sudo docker compose up pacmusic-staging --build --detach
+
+            # Wait for the container server to be ready
+            for i in {1..20}; do
+              if sudo docker exec pacmusic-staging curl -f http://localhost:$APP_PORT; then
+                echo "✅ Staging server is up!"
+                break
+              else
+                echo "Waiting for server... ($i/20)"
+                sleep 10
+              fi
+            done
+
+      # Step 3: Hit endpoint from GitHub Actions runner
+      - name: Hit Staging Endpoint
+        run: |
+          for i in {1..20}; do
+            if curl -f http://localhost:${{ secrets.APP_PORT }}; then
+              echo "✅ Staging endpoint reachable!"

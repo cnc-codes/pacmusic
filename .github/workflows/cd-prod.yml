@@ -1,0 +1,82 @@
+name: Deploy Production 🚀
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy-production:
+    name: Deploy to production server
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      # 1️⃣ Deploy to remote server via SSH
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_PATH_PROD: ${{ vars.APP_PATH }}
+          GIT_URL: ${{ secrets.GIT_URL }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          APP_NAME: ${{ vars.APP_NAME }}
+          APP_TAG: ${{ github.event.release.tag_name }}
+          APP_HOST: localhost
+          APP_PORT: 5000
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: APP_PATH_PROD, GIT_URL, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APP_NAME, APP_TAG, APP_HOST, APP_PORT
+          script: |
+            echo "🚀 Starting PacMusic Production Deployment..."
+
+            # Login to Docker Hub
+            sudo docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+
+            # Clone or update repository
+            if [[ -d "${APP_PATH_PROD}" ]]; then 
+              cd $APP_PATH_PROD
+              sudo docker compose down
+              git pull --rebase
+            else
+              ssh-keyscan github.com > ~/.ssh/known_hosts
+              git clone $GIT_URL $APP_PATH_PROD
+              cd $APP_PATH_PROD
+            fi
+
+            # Update .env file for docker-compose
+            echo "APP_IMAGE=${DOCKERHUB_USERNAME}/${APP_NAME}" > .env
+            echo "APP_TAG=$APP_TAG" >> .env
+            echo "APP_HOST=$APP_HOST" >> .env
+            echo "APP_PORT=$APP_PORT" >> .env
+
+            # Pull latest image
+            sudo docker pull ${DOCKERHUB_USERNAME}/${APP_NAME}:$APP_TAG
+
+            # Start production container
+            sudo docker compose up pacmusic-prod --build --detach
+
+            # Wait until production server is ready
+            for i in {1..20}; do
+              if sudo docker exec pacmusic-prod curl -f http://localhost:$APP_PORT; then
+                echo "✅ Production server is up!"
+                break
+              else
+                echo "⏳ Waiting for production server... ($i/20)"
+                sleep 10
+              fi
+            done
+
+      # 2️⃣ Verify Production Endpoint
+      - name: Hit Production Endpoint
+        run: |
+          for i in {1..20}; do
+            if curl -f ${{ secrets.PROD_URL }}; then
+              echo "✅ Production endpoint reachable!"
+              break
+            else
+              echo "⏳ Waiting for production endpoint... ($i/20)"
+              sleep 10
+            fi
+          done
