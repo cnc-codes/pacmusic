@@ -47,7 +47,7 @@ jobs:
 
             # Wait until staging server is ready
             for i in {1..20}; do
-              if docker exec pacmusic-stg curl -f http://localhost:$APP_STG_PORT; then
+              if docker exec pacmusic-stg curl -f http://localhost:5000; then
                 echo "✅ Staging server is up!"
                 break
               else
@@ -56,18 +56,15 @@ jobs:
               fi
             done
 
-      # 2️⃣ Hit staging endpoint from GitHub Actions runner
+      # 2️⃣ Hit endpoint from GitHub Actions runner (optional)
       - name: Hit Staging Endpoint
-        shell: bash
-        env:
-          STG_URL: ${{ secrets.STG_URL }}
         run: |
           for i in {1..20}; do
-            if curl -f $STG_URL ; then
-              echo "✅ Staging endpoint reachable!"
+            if curl -f ${{ secrets.STG_URL }}; then
+              echo "Staging endpoint reachable!"
               break
             else
-              echo "⏳ Waiting for staging endpoint... ($i/20)"
+              echo "Waiting for staging endpoint... ($i/20)"
               sleep 10
             fi
           done
