@@ -8,14 +8,14 @@ jobs:
   deploy-staging:
     name: Deploy to staging server
     runs-on: ubuntu-latest
-    environment: Staging
+    environment: staging
 
     steps:
       # 1️⃣ Execute deployment on remote server via SSH
       - name: Execute deployment command
         uses: appleboy/ssh-action@v1.0.3
         env:
-          APP_STG_PORT: ${{ secrets.APP_STG_PORT }}
+          APP_PATH_STAGING: ${{ secrets.APP_PATH_STAGING }}   # ex: /home/ubuntu/staging
           GIT_URL: ${{ secrets.GIT_URL }}
           APP_PORT: ${{ secrets.APP_STG_PORT }}
           MINIO_STG_ACCESS_KEY: ${{ secrets.MINIO_STG_ACCESS_KEY }}
@@ -29,11 +29,12 @@ jobs:
           script: |
             echo "🚀 Starting PacMusic Staging Deployment..."
 
-            # Create ~/.ssh if not exists
+            # Ensure ~/.ssh exists and add GitHub
             mkdir -p ~/.ssh
-
-            # Add GitHub to known_hosts
             ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+            # Ensure parent folder exists
+            mkdir -p $APP_PATH_STAGING
 
             # Clone or update repository
             if [[ -d "${APP_PATH_STAGING}/pacmusic" ]]; then
@@ -41,8 +42,9 @@ jobs:
               docker compose down
               git pull --rebase
             else
-              git clone $GIT_URL $APP_PATH_STAGING/pacmusic
-              cd $APP_PATH_STAGING/pacmusic
+              cd $APP_PATH_STAGING
+              git clone $GIT_URL pacmusic
+              cd pacmusic
             fi
 
             # Ensure docker-compose.yml exists
