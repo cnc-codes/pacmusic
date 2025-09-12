@@ -35,8 +35,8 @@ jobs:
               git pull --rebase
             else
               ssh-keyscan github.com >> ~/.ssh/known_hosts
-              git clone $GIT_URL $APP_PATH_STAGING
-              cd $APP_PATH_STAGING
+              git clone $GIT_URL $APP_STG_PATH
+              cd $APP_STG_PATH
             fi
 
 
