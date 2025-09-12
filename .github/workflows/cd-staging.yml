@@ -19,7 +19,7 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
-          APP_PATH: ${{ vars.APP_PATH }}
+          APP_PATH: ${{ secrets.APP_PATH }}
           GIT_URL: ${{ secrets.GIT_URL }}
           APP_STG_PORT: ${{ secrets.APP_PORT }}
         with:
@@ -31,7 +31,7 @@ jobs:
             # Clone or update repository
             if [[ -d "${APP_PATH}" ]]; then
               cd $APP_PATH
-              sudo docker compose down
+              docker compose down
               git pull --rebase
             else
               ssh-keyscan github.com > ~/.ssh/known_hosts
@@ -40,22 +40,20 @@ jobs:
             fi
 
             # Build and run PacMusic staging container
-            sudo docker compose up pacmusic-staging --build --detach
+            docker compose up pacmusic-stg --build --detach
 
-            # Wait for the container server to be ready
-            for i in {1..20}; do
-              if sudo docker exec pacmusic-staging curl -f http://localhost:$APP_PORT; then
-                echo "✅ Staging server is up!"
-                break
-              else
-                echo "Waiting for server... ($i/20)"
-                sleep 10
-              fi
-            done
-
-      # Step 3: Hit endpoint from GitHub Actions runner
+      # Step 3: Hit staging endpoint from GitHub Actions runner
       - name: Hit Staging Endpoint
+        shell: bash
+        env:
+          STG_URL: ${{ secrets.STG_URL }}
         run: |
           for i in {1..20}; do
-            if curl -f http://localhost:${{ secrets.APP_PORT }}; then
+            if curl -f $STG_URL ; then
               echo "✅ Staging endpoint reachable!"
+              break
+            else
+              echo "⏳ Waiting for staging endpoint... ($i/20)"
+              sleep 10
+            fi
+          done
