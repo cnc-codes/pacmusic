@@ -11,25 +11,25 @@ jobs:
     environment: Production
 
     steps:
-      # 1️⃣ Deploy to production via SSH
-      - name: Deploy via SSH
+      # 1️⃣ Execute deployment on remote server via SSH
+      - name: Execute deployment command
         uses: appleboy/ssh-action@v1.0.3
         env:
-          APP_PATH_PROD: ${{ secrets.APP_PATH }}
+          APP_PROD_PATH: ${{ vars.APP_PROD_PATH }}
           GIT_URL: ${{ secrets.GIT_URL }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           APP_NAME: ${{ vars.APP_NAME }}
           APP_TAG: ${{ github.event.release.tag_name }}
           APP_HOST: localhost
-          APP_PORT: ${{ secrets.APP_PORT }}
+          APP_PROD_PORT: ${{ secrets.APP_PROD_PORT }}
           MINIO_PROD_ACCESS_KEY: ${{ secrets.MINIO_PROD_ACCESS_KEY }}
           MINIO_PROD_SECRET_KEY: ${{ secrets.MINIO_PROD_SECRET_KEY }}
           MINIO_PROD_ENDPOINT: ${{ secrets.MINIO_PROD_ENDPOINT }}
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER_NAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.SSH_HOST_PRODUCTION }}
+          username: ${{ secrets.SSH_USER_NAME_PRODUCTION }}
+          key: ${{ secrets.SSH_PRIVAT_KEY_PRODUCTION }}
           envs: APP_PATH_PROD, GIT_URL, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APP_NAME, APP_TAG, APP_HOST, APP_PORT, MINIO_PROD_ACCESS_KEY, MINIO_PROD_SECRET_KEY, MINIO_PROD_ENDPOINT
           script: |
             echo "🚀 Starting PacMusic Production Deployment..."
@@ -40,7 +40,7 @@ jobs:
             # Add GitHub to known_hosts
             ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-            # Clone or update repository
+            # Clone or update repo
             if [[ -d "${APP_PATH_PROD}/pacmusic" ]]; then
               cd $APP_PATH_PROD/pacmusic
               sudo docker compose down
@@ -56,7 +56,7 @@ jobs:
               exit 1
             fi
 
-            # Update .env file for production
+            # Update .env file
             echo "APP_IMAGE=${DOCKERHUB_USERNAME}/${APP_NAME}" > .env
             echo "APP_TAG=$APP_TAG" >> .env
             echo "APP_HOST=$APP_HOST" >> .env
@@ -71,7 +71,7 @@ jobs:
             # Pull latest image
             sudo docker pull ${DOCKERHUB_USERNAME}/${APP_NAME}:$APP_TAG
 
-            # Start production container
+            # Build and run container
             sudo docker compose up pacmusic-prod --build --detach
 
             # Wait until production server is ready
@@ -86,3 +86,27 @@ jobs:
 
               if [[ $i -eq 20 ]]; then
                 echo "❌ Production server failed to start after 200s"
+                exit 1
+              fi
+            done
+
+      # 2️⃣ Hit production endpoint
+      - name: Hit Production Endpoint
+        shell: bash
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+        run: |
+          for i in {1..20}; do
+            if curl -f $PROD_URL; then
+              echo "✅ Production endpoint reachable!"
+              break
+            else
+              echo "⏳ Waiting for production endpoint... ($i/20)"
+              sleep 10
+            fi
+
+            if [[ $i -eq 20 ]]; then
+              echo "❌ Production endpoint not reachable after 200s"
+              exit 1
+            fi
+          done
