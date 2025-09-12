@@ -11,21 +11,21 @@ jobs:
     environment: Staging
 
     steps:
-      # 1️⃣ Deploy to staging via SSH
-      - name: Deploy via SSH
+      # 1️⃣ Execute deployment on remote server via SSH
+      - name: Execute deployment command
         uses: appleboy/ssh-action@v1.0.3
         env:
-          APP_PATH: ${{ secrets.APP_PATH }}
+          APP_STG_PORT: ${{ secrets.APP_STG_PORT }}
           GIT_URL: ${{ secrets.GIT_URL }}
-          APP_PORT: ${{ secrets.APP_PORT }}
+          APP_PORT: ${{ secrets.APP_STG_PORT }}
           MINIO_STG_ACCESS_KEY: ${{ secrets.MINIO_STG_ACCESS_KEY }}
           MINIO_STG_SECRET_KEY: ${{ secrets.MINIO_STG_SECRET_KEY }}
           MINIO_STG_ENDPOINT: ${{ secrets.MINIO_STG_ENDPOINT }}
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER_NAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: APP_PATH, GIT_URL, APP_PORT, MINIO_STG_ACCESS_KEY, MINIO_STG_SECRET_KEY, MINIO_STG_ENDPOINT
+          host: ${{ secrets.SSH_HOST_STAGING }}
+          username: ${{ secrets.SSH_USER_NAME_STAGING }}
+          key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
+          envs: APP_PATH_STAGING, GIT_URL, APP_PORT, MINIO_STG_ACCESS_KEY, MINIO_STG_SECRET_KEY, MINIO_STG_ENDPOINT
           script: |
             echo "🚀 Starting PacMusic Staging Deployment..."
 
@@ -36,28 +36,28 @@ jobs:
             ssh-keyscan github.com >> ~/.ssh/known_hosts
 
             # Clone or update repository
-            if [[ -d "${APP_PATH}/pacmusic" ]]; then
-              cd $APP_PATH/pacmusic
+            if [[ -d "${APP_PATH_STAGING}/pacmusic" ]]; then
+              cd $APP_PATH_STAGING/pacmusic
               docker compose down
               git pull --rebase
             else
-              git clone $GIT_URL $APP_PATH/pacmusic
-              cd $APP_PATH/pacmusic
+              git clone $GIT_URL $APP_PATH_STAGING/pacmusic
+              cd $APP_PATH_STAGING/pacmusic
             fi
 
             # Ensure docker-compose.yml exists
             if [[ ! -f "docker-compose.yml" ]]; then
-              echo "❌ docker-compose.yml not found in $APP_PATH/pacmusic"
+              echo "❌ docker-compose.yml not found in $APP_PATH_STAGING/pacmusic"
               exit 1
             fi
 
-            # Update .env file for staging
+            # Update .env file
             echo "APP_PORT=$APP_PORT" > .env
             echo "MINIO_STG_ACCESS_KEY=$MINIO_STG_ACCESS_KEY" >> .env
             echo "MINIO_STG_SECRET_KEY=$MINIO_STG_SECRET_KEY" >> .env
             echo "MINIO_STG_ENDPOINT=$MINIO_STG_ENDPOINT" >> .env
 
-            # Build and run PacMusic staging container
+            # Build and run container
             docker compose up pacmusic-stg --build --detach
 
             # Wait until staging server is ready
@@ -83,7 +83,7 @@ jobs:
           STG_URL: ${{ secrets.STG_URL }}
         run: |
           for i in {1..20}; do
-            if curl -f $STG_URL ; then
+            if curl -f $STG_URL; then
               echo "✅ Staging endpoint reachable!"
               break
             else
