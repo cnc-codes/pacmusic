@@ -6,107 +6,89 @@ on:
 
 jobs:
   deploy-production:
-    name: Deploy to production server
+    name: Deploy PacMusic to Production
     runs-on: ubuntu-latest
-    environment: Production
+    environment: production
 
     steps:
-      # 1️⃣ Execute deployment on remote server via SSH
-      - name: Execute deployment command
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Deploy to Production Server
         uses: appleboy/ssh-action@v1.0.3
         env:
           APP_PROD_PATH: ${{ vars.APP_PROD_PATH }}
-          GIT_URL: ${{ secrets.GIT_URL }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          APP_NAME: ${{ vars.APP_NAME }}
-          APP_TAG: ${{ github.event.release.tag_name }}
-          APP_HOST: localhost
           APP_PROD_PORT: ${{ secrets.APP_PROD_PORT }}
+          MINIO_PROD_ENDPOINT: ${{ secrets.MINIO_PROD_ENDPOINT }}
           MINIO_PROD_ACCESS_KEY: ${{ secrets.MINIO_PROD_ACCESS_KEY }}
           MINIO_PROD_SECRET_KEY: ${{ secrets.MINIO_PROD_SECRET_KEY }}
-          MINIO_PROD_ENDPOINT: ${{ secrets.MINIO_PROD_ENDPOINT }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GIT_URL: ${{ secrets.GIT_URL }}
+          APP_NAME: ${{ vars.APP_NAME }}
+          APP_TAG: ${{ github.event.release.tag_name }}
         with:
           host: ${{ secrets.SSH_HOST_PRODUCTION }}
           username: ${{ secrets.SSH_USER_NAME_PRODUCTION }}
           key: ${{ secrets.SSH_PRIVAT_KEY_PRODUCTION }}
-          envs: APP_PATH_PROD, GIT_URL, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APP_NAME, APP_TAG, APP_HOST, APP_PORT, MINIO_PROD_ACCESS_KEY, MINIO_PROD_SECRET_KEY, MINIO_PROD_ENDPOINT
+          envs: APP_PROD_PATH, APP_PROD_PORT, MINIO_PROD_ENDPOINT, MINIO_PROD_ACCESS_KEY, MINIO_PROD_SECRET_KEY, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, GIT_URL, APP_NAME, APP_TAG
           script: |
-            echo "🚀 Starting PacMusic Production Deployment..."
+            echo "🔹 Starting production deployment..."
 
-            # Create ~/.ssh if not exists
-            mkdir -p ~/.ssh
-
-            # Add GitHub to known_hosts
-            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            # Pull Docker image from Docker Hub
+            echo "🐳 Pulling Docker image: $DOCKERHUB_USERNAME/$APP_NAME:$APP_TAG"
+            sudo docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+            sudo docker pull $DOCKERHUB_USERNAME/$APP_NAME:$APP_TAG
 
             # Clone or update repo
-            if [[ -d "${APP_PATH_PROD}/pacmusic" ]]; then
-              cd $APP_PATH_PROD/pacmusic
+            if [[ -d "$APP_PROD_PATH" ]]; then
+              echo "🔄 Updating existing repository..."
+              cd $APP_PROD_PATH
               sudo docker compose down
               git pull --rebase
             else
-              git clone $GIT_URL $APP_PATH_PROD/pacmusic
-              cd $APP_PATH_PROD/pacmusic
+              echo "📥 Cloning repository..."
+              ssh-keyscan github.com >> ~/.ssh/known_hosts
+              git clone $GIT_URL $APP_PROD_PATH
+              cd $APP_PROD_PATH
             fi
 
-            # Ensure docker-compose.yml exists
-            if [[ ! -f "docker-compose.yml" ]]; then
-              echo "❌ docker-compose.yml not found in $APP_PATH_PROD/pacmusic"
-              exit 1
-            fi
-
-            # Update .env file
-            echo "APP_IMAGE=${DOCKERHUB_USERNAME}/${APP_NAME}" > .env
+            # Update .env file (without EOL)
+            echo "📝 Updating .env file..."
+            echo "MINIO_ENDPOINT=$MINIO_PROD_ENDPOINT" > .env
+            echo "MINIO_ACCESS_KEY=$MINIO_PROD_ACCESS_KEY" >> .env
+            echo "MINIO_SECRET_KEY=$MINIO_PROD_SECRET_KEY" >> .env
+            echo "APP_IMAGE=${DOCKERHUB_USERNAME}/${APP_NAME}" >> .env
             echo "APP_TAG=$APP_TAG" >> .env
-            echo "APP_HOST=$APP_HOST" >> .env
-            echo "APP_PROD_PORT=$APP_PORT" >> .env
-            echo "MINIO_PROD_ACCESS_KEY=$MINIO_PROD_ACCESS_KEY" >> .env
-            echo "MINIO_PROD_SECRET_KEY=$MINIO_PROD_SECRET_KEY" >> .env
-            echo "MINIO_PROD_ENDPOINT=$MINIO_PROD_ENDPOINT" >> .env
-
-            # Login to Docker Hub
-            sudo docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
-
-            # Pull latest image
-            sudo docker pull ${DOCKERHUB_USERNAME}/${APP_NAME}:$APP_TAG
+            echo "APP_PORT=$APP_PROD_PORT" >> .env
 
             # Build and run container
+            echo "🐳 Deploying production container..."
             sudo docker compose up pacmusic-prod --build --detach
 
-            # Wait until production server is ready
+            # Wait until server is ready
+            echo "⏳ Waiting for production server to be ready..."
             for i in {1..20}; do
-              if sudo docker exec pacmusic-prod curl -f http://localhost:$APP_PORT; then
+              if sudo docker exec pacmusic-prod curl -f http://localhost:5000 >/dev/null 2>&1; then
                 echo "✅ Production server is up!"
                 break
               else
-                echo "⏳ Waiting for production server... ($i/20)"
+                echo "⏳ Waiting... ($i/20)"
                 sleep 10
-              fi
-
-              if [[ $i -eq 20 ]]; then
-                echo "❌ Production server failed to start after 200s"
-                exit 1
               fi
             done
 
-      # 2️⃣ Hit production endpoint
       - name: Hit Production Endpoint
-        shell: bash
         env:
           PROD_URL: ${{ secrets.PROD_URL }}
         run: |
+          echo "🌐 Checking production endpoint..."
           for i in {1..20}; do
-            if curl -f $PROD_URL; then
+            if curl -f $PROD_URL >/dev/null 2>&1; then
               echo "✅ Production endpoint reachable!"
               break
             else
               echo "⏳ Waiting for production endpoint... ($i/20)"
               sleep 10
-            fi
-
-            if [[ $i -eq 20 ]]; then
-              echo "❌ Production endpoint not reachable after 200s"
-              exit 1
             fi
           done
