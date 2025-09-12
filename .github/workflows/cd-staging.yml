@@ -8,14 +8,14 @@ jobs:
   deploy-staging:
     name: Deploy to staging server
     runs-on: ubuntu-latest
-    environment: staging
+    environment: Staging
 
     steps:
       # 1️⃣ Execute deployment on remote server via SSH
       - name: Execute deployment command
         uses: appleboy/ssh-action@v1.0.3
         env:
-          APP_PATH_STAGING: ${{ secrets.APP_PATH_STAGING }}   # ex: /home/ubuntu/staging
+          APP_STG_PATH: ${{ vars.APP_STG_PATH}}   # ex: /home/ubuntu/staging
           GIT_URL: ${{ secrets.GIT_URL }}
           APP_PORT: ${{ secrets.APP_STG_PORT }}
           MINIO_STG_ACCESS_KEY: ${{ secrets.MINIO_STG_ACCESS_KEY }}
@@ -25,7 +25,7 @@ jobs:
           host: ${{ secrets.SSH_HOST_STAGING }}
           username: ${{ secrets.SSH_USER_NAME_STAGING }}
           key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
-          envs: APP_PATH_STAGING, GIT_URL, APP_PORT, MINIO_STG_ACCESS_KEY, MINIO_STG_SECRET_KEY, MINIO_STG_ENDPOINT
+          envs: APP_STG_PATH, GIT_URL, APP_PORT, MINIO_STG_ACCESS_KEY, MINIO_STG_SECRET_KEY, MINIO_STG_ENDPOINT
           script: |
             echo "🚀 Starting PacMusic Staging Deployment..."
 
