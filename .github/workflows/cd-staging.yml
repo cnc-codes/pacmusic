@@ -11,11 +11,7 @@ jobs:
     environment: Staging
 
     steps:
-      # Step 1: Checkout repository
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Step 2: Deploy to staging via SSH
+      # 1️⃣ Deploy to staging via SSH
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -28,6 +24,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: APP_PATH, GIT_URL, APP_STG_PORT
           script: |
+            echo "🚀 Starting PacMusic Staging Deployment..."
+
             # Clone or update repository
             if [[ -d "${APP_PATH}" ]]; then
               cd $APP_PATH
@@ -39,10 +37,24 @@ jobs:
               cd $APP_PATH
             fi
 
+            # Update .env file for staging
+            echo "APP_STG_PORT=$APP_STG_PORT" > .env
+
             # Build and run PacMusic staging container
             docker compose up pacmusic-stg --build --detach
 
-      # Step 3: Hit staging endpoint from GitHub Actions runner
+            # Wait until staging server is ready
+            for i in {1..20}; do
+              if docker exec pacmusic-stg curl -f http://localhost:5000; then
+                echo "✅ Staging server is up!"
+                break
+              else
+                echo "⏳ Waiting for staging server... ($i/20)"
+                sleep 10
+              fi
+            done
+
+      # 2️⃣ Hit staging endpoint from GitHub Actions runner
       - name: Hit Staging Endpoint
         shell: bash
         env:
