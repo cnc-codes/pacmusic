@@ -33,18 +33,15 @@ jobs:
           # Build and run pacmusic-dev service
           sudo docker compose up --build --detach pacmusic-dev
 
-          # Optional: run and app-dev together
-          sudo docker compose up app-dev --build --detach
-
-      # Step 4: Wait for app-dev server to be ready inside container
+      # Step 4: Wait for pacmusic-dev server to be ready inside container
       - name: Wait for pacmusic-dev server
         run: |
           for i in {1..20}; do
-            if sudo docker exec app-dev curl -f http://localhost:5000; then
-              echo "Server is up!"
+            if sudo docker exec pacmusic-dev curl -f http://localhost:5000; then
+              echo "✅ Server is up!"
               break
             else
-              echo "Waiting for server... ($i/20)"
+              echo "⏳ Waiting for server... ($i/20)"
               sleep 10
             fi
           done
@@ -52,7 +49,7 @@ jobs:
       # Step 5: Run automated tests
       - name: Run Tests
         run: |
-          export APP_PORT=5000
+          export APP_PORT=5004
           python3 testing/test.py
 
       # Step 6: Cleanup containers after testing
