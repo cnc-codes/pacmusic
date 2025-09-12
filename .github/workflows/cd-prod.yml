@@ -7,10 +7,10 @@ on:
 jobs:
   deploy-production:
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
 
     steps:
-      # Step 1: Checkout repo
+      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -22,10 +22,11 @@ jobs:
           username: ${{ secrets.SSH_USER_NAME_PRODUCTION }}
           key: ${{ secrets.SSH_PRIVAT_KEY_PRODUCTION }}
           script: |
+            # Define variables
             APP_PROD_PATH=${{ vars.APP_PROD_PATH }}
             APP_PROD_PORT=${{ vars.APP_PROD_PORT }}
             APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/pacmusic
-            APP_TAG=${{ github.event.release.tag_name }}
+            APP_TAG=latest
 
             # Pull the Docker image from Docker Hub
             echo "🐳 Pulling image: $APP_IMAGE:$APP_TAG"
@@ -42,14 +43,16 @@ jobs:
               cd $APP_PROD_PATH/pacmusic
             fi
 
-            # Create minimal .env with APP_PORT
-            echo "APP_PORT=$APP_PROD_PORT" > .env
+            # Create .env with all necessary variables
+            echo "APP_PROD_PORT=$APP_PROD_PORT" > .env
+            echo "APP_IMAGE=$APP_IMAGE" >> .env
+            echo "APP_TAG=$APP_TAG" >> .env
 
             # Stop old container if exists
             sudo docker compose down || true
 
             # Start production container using pulled image
-            sudo docker compose up --detach pacmusic-prod
+            sudo docker compose up --build --detach pacmusic-prod
 
             # Wait until container is running
             for i in {1..20}; do
