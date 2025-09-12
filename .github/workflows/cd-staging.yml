@@ -69,10 +69,10 @@ jobs:
             done
       - name: Hit Staging Endpoint
         env:
-          STAGING_URL: ${{ secrets.STAGING_URL }}
+          STG_URL: ${{ secrets.STG_URL }}
         run: |
           for i in {1..20}; do
-            if curl -f $STAGING_URL ; then
+            if curl -f $STG_URL ; then
               echo "✅ Staging endpoint reachable!"
               break
             else
