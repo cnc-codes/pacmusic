@@ -17,12 +17,12 @@ jobs:
         env:
           APP_PATH: ${{ secrets.APP_PATH }}
           GIT_URL: ${{ secrets.GIT_URL }}
-          APP_STG_PORT: ${{ secrets.APP_PORT }}
+          APP_PORT: ${{ secrets.APP_PORT }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: APP_PATH, GIT_URL, APP_STG_PORT
+          envs: APP_PATH, GIT_URL, APP_PORT
           script: |
             echo "🚀 Starting PacMusic Staging Deployment..."
 
@@ -38,14 +38,14 @@ jobs:
             fi
 
             # Update .env file for staging
-            echo "APP_STG_PORT=$APP_STG_PORT" > .env
+            echo "APP_PORT=$APP_PORT" > .env
 
             # Build and run PacMusic staging container
             docker compose up pacmusic-stg --build --detach
 
             # Wait until staging server is ready
             for i in {1..20}; do
-              if docker exec pacmusic-stg curl -f http://localhost:5000; then
+              if docker exec pacmusic-stg curl -f http://localhost:$APP_PORT; then
                 echo "✅ Staging server is up!"
                 break
               else
