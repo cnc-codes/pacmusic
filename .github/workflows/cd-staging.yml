@@ -53,13 +53,13 @@ jobs:
 
             # Build and run container
 
-            sudo docker compose up pacmusic-staging --build --detach
+            sudo docker compose up pacmusic-stg --build --detach
 
 
             # Wait until server is ready
 
             for i in {1..20}; do
-              if sudo docker exec pacmusic-staging curl -f http://localhost:$APP_STG_PORT; then
+              if sudo docker exec pacmusic-stg curl -f http://localhost:$APP_STG_PORT; then
                 echo "✅ Staging server is up!"
                 break
               else
