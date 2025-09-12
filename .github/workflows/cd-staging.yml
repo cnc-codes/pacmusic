@@ -34,22 +34,22 @@ jobs:
             ssh-keyscan github.com >> ~/.ssh/known_hosts
 
             # Ensure parent folder exists
-            mkdir -p $APP_PATH_STAGING
+            mkdir -p $APP_STG_PATH
 
-            # Clone or update repository
-            if [[ -d "${APP_PATH_STAGING}/pacmusic" ]]; then
-              cd $APP_PATH_STAGING/pacmusic
-              docker compose down
+            # Clone or update repo
+            if [[ -d "${APP_STG_PATH}" ]]; then
+              cd $APP_PATH_STAGING
+              sudo docker compose down
               git pull --rebase
             else
+              ssh-keyscan github.com > ~/.ssh/known_hosts
+              git clone $GIT_URL $APP_STG_PATH
               cd $APP_PATH_STAGING
-              git clone $GIT_URL pacmusic
-              cd pacmusic
             fi
 
             # Ensure docker-compose.yml exists
             if [[ ! -f "docker-compose.yml" ]]; then
-              echo "❌ docker-compose.yml not found in $APP_PATH_STAGING/pacmusic"
+              echo "❌ docker-compose.yml not found in $APP_PATH_STAGING"
               exit 1
             fi
 
