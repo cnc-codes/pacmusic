@@ -1,100 +1,82 @@
+---
 name: Deploy Staging 🚀
-
 on:
   push:
-    branches: [ "main" ]
-
+    branches:
+      - main
 jobs:
   deploy-staging:
-    name: Deploy to staging server
+    name: Deploy PacMusic to Staging
     runs-on: ubuntu-latest
-    environment: Staging
-
+    environment: staging
     steps:
-      # 1️⃣ Execute deployment on remote server via SSH
-      - name: Execute deployment command
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Deploy to Staging Server
         uses: appleboy/ssh-action@v1.0.3
         env:
-          APP_STG_PATH: ${{ vars.APP_STG_PATH}}   # ex: /home/ubuntu/staging
-          GIT_URL: ${{ secrets.GIT_URL }}
-          APP_PORT: ${{ secrets.APP_STG_PORT }}
+          APP_STG_PATH: ${{ vars.APP_STG_PATH }}
+          APP_STG_PORT: ${{ secrets.APP_STG_PORT }}
+          MINIO_STG_ENDPOINT: ${{ secrets.MINIO_STG_ENDPOINT }}
           MINIO_STG_ACCESS_KEY: ${{ secrets.MINIO_STG_ACCESS_KEY }}
           MINIO_STG_SECRET_KEY: ${{ secrets.MINIO_STG_SECRET_KEY }}
-          MINIO_STG_ENDPOINT: ${{ secrets.MINIO_STG_ENDPOINT }}
         with:
           host: ${{ secrets.SSH_HOST_STAGING }}
           username: ${{ secrets.SSH_USER_NAME_STAGING }}
           key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
-          envs: APP_STG_PATH, GIT_URL, APP_PORT, MINIO_STG_ACCESS_KEY, MINIO_STG_SECRET_KEY, MINIO_STG_ENDPOINT
-          script: |
-            echo "🚀 Starting PacMusic Staging Deployment..."
+          envs: APP_STG_PATH, APP_STG_PORT, MINIO_STG_ENDPOINT, MINIO_STG_ACCESS_KEY,
+            MINIO_STG_SECRET_KEY
+          script: >
+            # Clone or update repository
 
-            # Ensure ~/.ssh exists and add GitHub
-            mkdir -p ~/.ssh
-            ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-            # Ensure parent folder exists
-            mkdir -p $APP_STG_PATH
-
-            # Clone or update repo
             if [[ -d "${APP_STG_PATH}" ]]; then
-              cd $APP_PATH_STAGING
+              cd $APP_STG_PATH
               sudo docker compose down
               git pull --rebase
             else
-              ssh-keyscan github.com > ~/.ssh/known_hosts
-              git clone $GIT_URL $APP_STG_PATH
-              cd $APP_PATH_STAGING
+              ssh-keyscan github.com >> ~/.ssh/known_hosts
+              git clone git@github.com:${{ github.repository }} $APP_STG_PATH
+              cd $APP_STG_PATH
             fi
 
-            # Ensure docker-compose.yml exists
-            if [[ ! -f "docker-compose.yml" ]]; then
-              echo "❌ docker-compose.yml not found in $APP_PATH_STAGING"
-              exit 1
-            fi
 
-            # Update .env file
-            echo "APP_PORT=$APP_PORT" > .env
-            echo "MINIO_STG_ACCESS_KEY=$MINIO_STG_ACCESS_KEY" >> .env
-            echo "MINIO_STG_SECRET_KEY=$MINIO_STG_SECRET_KEY" >> .env
-            echo "MINIO_STG_ENDPOINT=$MINIO_STG_ENDPOINT" >> .env
+            # Update .env file for staging
+
+            echo "APP_PORT=$APP_STG_PORT" > .env
+
+            echo "MINIO_ENDPOINT=$MINIO_STG_ENDPOINT" >> .env
+
+            echo "MINIO_ACCESS_KEY=$MINIO_STG_ACCESS_KEY" >> .env
+
+            echo "MINIO_SECRET_KEY=$MINIO_STG_SECRET_KEY" >> .env
+
 
             # Build and run container
-            docker compose up pacmusic-stg --build --detach
 
-            # Wait until staging server is ready
+            sudo docker compose up pacmusic-staging --build --detach
+
+
+            # Wait until server is ready
+
             for i in {1..20}; do
-              if docker exec pacmusic-stg curl -f http://localhost:$APP_PORT; then
+              if sudo docker exec pacmusic-staging curl -f http://localhost:$APP_STG_PORT; then
                 echo "✅ Staging server is up!"
                 break
               else
-                echo "⏳ Waiting for staging server... ($i/20)"
+                echo "⏳ Waiting for server... ($i/20)"
                 sleep 10
               fi
-
-              if [[ $i -eq 20 ]]; then
-                echo "❌ Staging server failed to start after 200s"
-                exit 1
-              fi
             done
-
-      # 2️⃣ Hit staging endpoint from GitHub Actions runner
       - name: Hit Staging Endpoint
-        shell: bash
         env:
-          STG_URL: ${{ secrets.STG_URL }}
+          STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
           for i in {1..20}; do
-            if curl -f $STG_URL; then
+            if curl -f $STAGING_URL ; then
               echo "✅ Staging endpoint reachable!"
               break
             else
               echo "⏳ Waiting for staging endpoint... ($i/20)"
               sleep 10
-            fi
-
-            if [[ $i -eq 20 ]]; then
-              echo "❌ Staging endpoint not reachable after 200s"
-              exit 1
             fi
           done
