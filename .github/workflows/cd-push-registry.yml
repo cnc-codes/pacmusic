@@ -1,0 +1,38 @@
+name: Push Container Registry 🛒
+
+on:
+  push:
+    tags:
+      - '*'   # Trigger when any tag is pushed
+
+jobs:
+  build-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Step 3: Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 4: Build and push Docker image
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pacmusic:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/pacmusic:latest
