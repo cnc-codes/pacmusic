@@ -22,7 +22,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
           script: |
             APP_STG_PATH=${{ vars.APP_STG_PATH }}
-            APP_STG_PORT=${{ secrets.APP_STG_PORT }}
+            APP_STG_PORT=${{ vars.APP_STG_PORT }}
 
             # Go to the repository folder or clone it if it doesn't exist
             if [[ -d "$APP_STG_PATH/pacmusic/.git" ]]; then

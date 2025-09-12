@@ -22,6 +22,7 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+    image: pacmusic-stg:latest
     container_name: pacmusic-stg
     # environment:
     #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
