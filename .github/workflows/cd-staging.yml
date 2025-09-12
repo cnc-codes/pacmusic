@@ -17,14 +17,12 @@ jobs:
         env:
           APP_PATH: ${{ secrets.APP_PATH }}
           GIT_URL: ${{ secrets.GIT_URL }}
-          APP_STG_PORT: ${{ secrets.APP_PORT }}
-          APP_HOST: localhost
-          APP_PORT: ${{secrets.APP_PORT}}
+          APP_PORT: ${{ secrets.APP_PORT }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: APP_PATH, GIT_URL, APP_HOST, APP_PORT, APP_STG_PORT
+          envs: APP_PATH, GIT_URL, APP_PORT
           script: |
             echo "🚀 Starting PacMusic Staging Deployment..."
 
@@ -39,15 +37,15 @@ jobs:
               cd $APP_PATH
             fi
 
-            # Create .env file for staging
-            echo "APP_STG_PORT=$APP_STG_PORT" > .env
+            # Update .env file for staging
+            echo "APP_PORT=$APP_PORT" > .env
 
             # Build and run PacMusic staging container
             docker compose up pacmusic-stg --build --detach
 
             # Wait until staging server is ready
             for i in {1..20}; do
-              if docker exec pacmusic-stg curl -f http://localhost:5000; then
+              if docker exec pacmusic-stg curl -f http://localhost:$APP_PORT; then
                 echo "✅ Staging server is up!"
                 break
               else
@@ -56,15 +54,18 @@ jobs:
               fi
             done
 
-      # 2️⃣ Hit endpoint from GitHub Actions runner (optional)
+      # 2️⃣ Hit staging endpoint from GitHub Actions runner
       - name: Hit Staging Endpoint
+        shell: bash
+        env:
+          STG_URL: ${{ secrets.STG_URL }}
         run: |
           for i in {1..20}; do
-            if curl -f ${{ secrets.STG_URL }}; then
-              echo "Staging endpoint reachable!"
+            if curl -f $STG_URL ; then
+              echo "✅ Staging endpoint reachable!"
               break
             else
-              echo "Waiting for staging endpoint... ($i/20)"
+              echo "⏳ Waiting for staging endpoint... ($i/20)"
               sleep 10
             fi
           done
