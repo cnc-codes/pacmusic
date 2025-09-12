@@ -36,7 +36,7 @@ jobs:
             fi
 
             # Create minimal .env with only APP_STG_PORT
-            echo "APP_PORT=$APP_STG_PORT" > .env
+            echo "APP_STG_PORT=$APP_STG_PORT" > .env
 
             # Stop the old container if it exists
             sudo docker compose down || true
