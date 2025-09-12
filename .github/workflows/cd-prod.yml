@@ -1,4 +1,4 @@
-name: Deploy Production
+name: Deploy Production 🚀
 
 on:
   release:
@@ -10,10 +10,12 @@ jobs:
     environment: production
 
     steps:
-      - name: Checkout repo
+      # Step 1: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Deploy to Production
+      # Step 2: SSH to production server
+      - name: Deploy to Production Server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST_PRODUCTION }}
@@ -21,46 +23,56 @@ jobs:
           key: ${{ secrets.SSH_PRIVAT_KEY_PRODUCTION }}
           script: |
             APP_PROD_PATH=${{ vars.APP_PROD_PATH }}
-            APP_PROD_PORT=${{ secrets.APP_PROD_PORT }}
+            APP_PROD_PORT=${{ vars.APP_PROD_PORT }}
+            APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/pacmusic
+            APP_TAG=${{ github.event.release.tag_name }}
 
-            if [[ -d "$APP_PROD_PATH" ]]; then
-              cd $APP_PROD_PATH
-              sudo docker compose down
+            # Pull the Docker image from Docker Hub
+            echo "🐳 Pulling image: $APP_IMAGE:$APP_TAG"
+            sudo docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            sudo docker pull $APP_IMAGE:$APP_TAG
+
+            # Go to repository folder or clone it if missing
+            if [[ -d "$APP_PROD_PATH/pacmusic/.git" ]]; then
+              cd $APP_PROD_PATH/pacmusic
               git pull --rebase
             else
-              git clone $GIT_URL $APP_PROD_PATH
-              cd $APP_PROD_PATH
+              rm -rf $APP_PROD_PATH/pacmusic
+              git clone $GIT_URL $APP_PROD_PATH/pacmusic
+              cd $APP_PROD_PATH/pacmusic
             fi
 
-            # Dummy .env
-            echo "MINIO_ENDPOINT=dummy" > .env
-            echo "MINIO_ACCESS_KEY=dummy" >> .env
-            echo "MINIO_SECRET_KEY=dummy" >> .env
-            echo "APP_PORT=$APP_PROD_PORT" >> .env
+            # Create minimal .env with APP_PORT
+            echo "APP_PORT=$APP_PROD_PORT" > .env
 
-            # Deploy container
-            sudo docker compose up pacmusic-prod --build --detach
+            # Stop old container if exists
+            sudo docker compose down || true
 
-            # Wait server
+            # Start production container using pulled image
+            sudo docker compose up --detach pacmusic-prod
+
+            # Wait until container is running
             for i in {1..20}; do
-              if sudo docker exec pacmusic-prod curl -f http://localhost:$APP_PROD_PORT; then
-                echo "✅ Production server ready"
+              STATUS=$(sudo docker inspect -f '{{.State.Running}}' pacmusic-prod)
+              if [ "$STATUS" = "true" ]; then
+                echo "✅ Container pacmusic-prod is running"
                 break
               else
-                echo "⏳ Waiting... ($i/20)"
+                echo "⏳ Waiting for container... ($i/20)"
                 sleep 5
               fi
             done
 
+      # Step 3: Test production endpoint
       - name: Test Production Endpoint
         run: |
-          PROD_IP=${{ secrets.SSH_HOST_PRODUCTION }}
+          PROD_URL=${{ secrets.PROD_URL }}
           for i in {1..20}; do
-            if curl -f http://$PROD_IP >/dev/null 2>&1; then
+            if curl -f $PROD_URL >/dev/null 2>&1; then
               echo "✅ Production endpoint reachable!"
               break
             else
-              echo "⏳ Waiting... ($i/20)"
-              sleep 5
+              echo "⏳ Waiting for endpoint... ($i/20)"
+              sleep 10
             fi
           done
