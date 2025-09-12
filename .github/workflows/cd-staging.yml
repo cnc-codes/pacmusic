@@ -1,82 +1,67 @@
----
-name: Deploy Staging 🚀
+name: Deploy Staging
+
 on:
   push:
     branches:
       - main
+
 jobs:
   deploy-staging:
-    name: Deploy PacMusic to Staging
     runs-on: ubuntu-latest
     environment: staging
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout repo
         uses: actions/checkout@v3
-      - name: Deploy to Staging Server
+
+      - name: Deploy to Staging
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          APP_STG_PATH: ${{ vars.APP_STG_PATH }}
-          APP_STG_PORT: ${{ secrets.APP_STG_PORT }}
-          MINIO_STG_ENDPOINT: ${{ secrets.MINIO_STG_ENDPOINT }}
-          MINIO_STG_ACCESS_KEY: ${{ secrets.MINIO_STG_ACCESS_KEY }}
-          MINIO_STG_SECRET_KEY: ${{ secrets.MINIO_STG_SECRET_KEY }}
         with:
           host: ${{ secrets.SSH_HOST_STAGING }}
           username: ${{ secrets.SSH_USER_NAME_STAGING }}
           key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
-          envs: APP_STG_PATH, APP_STG_PORT, MINIO_STG_ENDPOINT, MINIO_STG_ACCESS_KEY,
-            MINIO_STG_SECRET_KEY
-          script: >
-            # Clone or update repository
+          script: |
+            APP_STG_PATH=${{ vars.APP_STG_PATH }}
+            APP_STG_PORT=5001
 
-            if [[ -d "${APP_STG_PATH}" ]]; then
+            if [[ -d "$APP_STG_PATH" ]]; then
               cd $APP_STG_PATH
               sudo docker compose down
               git pull --rebase
             else
-              ssh-keyscan github.com >> ~/.ssh/known_hosts
               git clone $GIT_URL $APP_STG_PATH
               cd $APP_STG_PATH
             fi
 
+            # Dummy .env
+            echo "MINIO_ENDPOINT=dummy" > .env
+            echo "MINIO_ACCESS_KEY=dummy" >> .env
+            echo "MINIO_SECRET_KEY=dummy" >> .env
+            echo "APP_PORT=$APP_STG_PORT" >> .env
 
-            # Update .env file for staging
-
-            echo "APP_PORT=$APP_STG_PORT" > .env
-
-            echo "MINIO_ENDPOINT=$MINIO_STG_ENDPOINT" >> .env
-
-            echo "MINIO_ACCESS_KEY=$MINIO_STG_ACCESS_KEY" >> .env
-
-            echo "MINIO_SECRET_KEY=$MINIO_STG_SECRET_KEY" >> .env
-
-
-            # Build and run container
-
+            # Deploy container
             sudo docker compose up pacmusic-stg --build --detach
 
-
-            # Wait until server is ready
-
+            # Wait server
             for i in {1..20}; do
               if sudo docker exec pacmusic-stg curl -f http://localhost:$APP_STG_PORT; then
-                echo "✅ Staging server is up!"
+                echo "✅ Staging server ready"
                 break
               else
-                echo "⏳ Waiting for server... ($i/20)"
-                sleep 10
+                echo "⏳ Waiting... ($i/20)"
+                sleep 5
               fi
             done
-      - name: Hit Staging Endpoint
-        env:
-          STG_URL: ${{ secrets.STG_URL }}
+
+      - name: Test Staging Endpoint
         run: |
+          STG_IP=${{ secrets.SSH_HOST_STAGING }}
           for i in {1..20}; do
-            if curl -f $STG_URL ; then
+            if curl -f http://$STG_IP >/dev/null 2>&1; then
               echo "✅ Staging endpoint reachable!"
               break
             else
-              echo "⏳ Waiting for staging endpoint... ($i/20)"
-              sleep 10
+              echo "⏳ Waiting... ($i/20)"
+              sleep 5
             fi
           done

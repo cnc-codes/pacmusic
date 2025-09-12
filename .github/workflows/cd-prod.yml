@@ -1,4 +1,4 @@
-name: Deploy Production 🚀
+name: Deploy Production
 
 on:
   release:
@@ -6,89 +6,61 @@ on:
 
 jobs:
   deploy-production:
-    name: Deploy PacMusic to Production
     runs-on: ubuntu-latest
     environment: production
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Deploy to Production Server
+      - name: Deploy to Production
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          APP_PROD_PATH: ${{ vars.APP_PROD_PATH }}
-          APP_PROD_PORT: ${{ secrets.APP_PROD_PORT }}
-          MINIO_PROD_ENDPOINT: ${{ secrets.MINIO_PROD_ENDPOINT }}
-          MINIO_PROD_ACCESS_KEY: ${{ secrets.MINIO_PROD_ACCESS_KEY }}
-          MINIO_PROD_SECRET_KEY: ${{ secrets.MINIO_PROD_SECRET_KEY }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          GIT_URL: ${{ secrets.GIT_URL }}
-          APP_NAME: ${{ vars.APP_NAME }}
-          APP_TAG: ${{ github.event.release.tag_name }}
         with:
           host: ${{ secrets.SSH_HOST_PRODUCTION }}
           username: ${{ secrets.SSH_USER_NAME_PRODUCTION }}
           key: ${{ secrets.SSH_PRIVAT_KEY_PRODUCTION }}
-          envs: APP_PROD_PATH, APP_PROD_PORT, MINIO_PROD_ENDPOINT, MINIO_PROD_ACCESS_KEY, MINIO_PROD_SECRET_KEY, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, GIT_URL, APP_NAME, APP_TAG
           script: |
-            echo "🔹 Starting production deployment..."
+            APP_PROD_PATH=${{ vars.APP_PROD_PATH }}
+            APP_PROD_PORT=${{ secrets.APP_PROD_PORT }}
 
-            # Pull Docker image from Docker Hub
-            echo "🐳 Pulling Docker image: $DOCKERHUB_USERNAME/$APP_NAME:$APP_TAG"
-            sudo docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
-            sudo docker pull $DOCKERHUB_USERNAME/$APP_NAME:$APP_TAG
-
-            # Clone or update repo
             if [[ -d "$APP_PROD_PATH" ]]; then
-              echo "🔄 Updating existing repository..."
               cd $APP_PROD_PATH
               sudo docker compose down
               git pull --rebase
             else
-              echo "📥 Cloning repository..."
-              ssh-keyscan github.com >> ~/.ssh/known_hosts
               git clone $GIT_URL $APP_PROD_PATH
               cd $APP_PROD_PATH
             fi
 
-            # Update .env file (without EOL)
-            echo "📝 Updating .env file..."
-            echo "MINIO_ENDPOINT=$MINIO_PROD_ENDPOINT" > .env
-            echo "MINIO_ACCESS_KEY=$MINIO_PROD_ACCESS_KEY" >> .env
-            echo "MINIO_SECRET_KEY=$MINIO_PROD_SECRET_KEY" >> .env
-            echo "APP_IMAGE=${DOCKERHUB_USERNAME}/${APP_NAME}" >> .env
-            echo "APP_TAG=$APP_TAG" >> .env
+            # Dummy .env
+            echo "MINIO_ENDPOINT=dummy" > .env
+            echo "MINIO_ACCESS_KEY=dummy" >> .env
+            echo "MINIO_SECRET_KEY=dummy" >> .env
             echo "APP_PORT=$APP_PROD_PORT" >> .env
 
-            # Build and run container
-            echo "🐳 Deploying production container..."
+            # Deploy container
             sudo docker compose up pacmusic-prod --build --detach
 
-            # Wait until server is ready
-            echo "⏳ Waiting for production server to be ready..."
+            # Wait server
             for i in {1..20}; do
-              if sudo docker exec pacmusic-prod curl -f http://localhost:5000 >/dev/null 2>&1; then
-                echo "✅ Production server is up!"
+              if sudo docker exec pacmusic-prod curl -f http://localhost:$APP_PROD_PORT; then
+                echo "✅ Production server ready"
                 break
               else
                 echo "⏳ Waiting... ($i/20)"
-                sleep 10
+                sleep 5
               fi
             done
 
-      - name: Hit Production Endpoint
-        env:
-          PROD_URL: ${{ secrets.PROD_URL }}
+      - name: Test Production Endpoint
         run: |
-          echo "🌐 Checking production endpoint..."
+          PROD_IP=${{ secrets.SSH_HOST_PRODUCTION }}
           for i in {1..20}; do
-            if curl -f $PROD_URL >/dev/null 2>&1; then
+            if curl -f http://$PROD_IP >/dev/null 2>&1; then
               echo "✅ Production endpoint reachable!"
               break
             else
-              echo "⏳ Waiting for production endpoint... ($i/20)"
-              sleep 10
+              echo "⏳ Waiting... ($i/20)"
+              sleep 5
             fi
           done
