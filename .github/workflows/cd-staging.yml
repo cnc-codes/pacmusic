@@ -29,6 +29,7 @@ jobs:
             APP_STG_PORT_1=${{ vars.APP_STG_PORT_1 }}
             APP_STG_PORT_2=${{ vars.APP_STG_PORT_2 }}
             STG_DOMAIN=${{ vars.STG_DOMAIN }}
+            STG_EMAIL=${{ secrets.EMAIL }}
             SSL_PATH=/etc/letsencrypt/live/$STG_DOMAIN
             APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/pacmusic
             APP_TAG=latest
@@ -55,27 +56,33 @@ jobs:
 
             # Pull Docker image
             echo "🐳 Pulling image $APP_IMAGE:$APP_TAG"
-            sudo docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            sudo docker pull $APP_IMAGE:$APP_TAG
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker pull $APP_IMAGE:$APP_TAG
 
             # Stop old containers
             echo "🛑 Stopping old containers..."
-            sudo docker compose down || true
+            docker compose down || true
 
-            # Start containers: apps + nginx + certbot
-            echo "🚀 Starting new containers..."
-            sudo docker compose up --build --detach pacmusic-stg-1 pacmusic-stg-2 pacmusic-nginx pacmusic-certbot certbot-init
+            # 1️⃣ Run certbot-init to ensure SSL exists
+            echo "🔐 Ensuring SSL certificate exists..."
+            docker compose run --rm certbot-init || true
 
-            # Wait until all containers are running
-            for i in {1..20}; do
+            # 2️⃣ Start app + Nginx + certbot auto-renew
+            echo "🚀 Starting app containers and Nginx..."
+            docker compose up --build --detach pacmusic-stg-1 pacmusic-stg-2 pacmusic-nginx pacmusic-certbot
+
+            # 3️⃣ Wait until all containers are running
+            READY=false
+            for i in $(seq 1 20); do
               READY=true
               for C in pacmusic-stg-1 pacmusic-stg-2 pacmusic-nginx; do
-                STATUS=$(sudo docker inspect -f '{{.State.Running}}' $C)
+                STATUS=$(docker inspect -f '{{.State.Running}}' $C)
                 if [ "$STATUS" != "true" ]; then
                   READY=false
                   break
                 fi
               done
+
               if [ "$READY" = "true" ]; then
                 echo "✅ All staging containers are running"
                 break
@@ -88,13 +95,14 @@ jobs:
             if [ "$READY" != "true" ]; then
               echo "❌ Some staging containers failed to start"
               exit 1
+            fi
 
       # 3. Test staging endpoint
       - name: Test Staging Endpoint
         run: |
           STG_URL="https://${{ vars.STG_DOMAIN }}"
           echo "🔗 Testing staging endpoint: $STG_URL"
-          for i in {1..20}; do
+          for i in $(seq 1 20); do
             if curl -f $STG_URL >/dev/null 2>&1; then
               echo "✅ Staging endpoint reachable!"
               exit 0
