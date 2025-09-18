@@ -1,4 +1,4 @@
-name: Dev Testing
+name: Dev Testing Workflow
 
 # Trigger workflow when a Pull Request is opened to the main branch
 on:
@@ -49,7 +49,7 @@ jobs:
       # Step 5: Run automated tests
       - name: Run Tests
         run: |
-          export APP_PORT=5004
+          export APP_PORT=5001
           python3 testing/test.py
 
       # Step 6: Cleanup containers after testing

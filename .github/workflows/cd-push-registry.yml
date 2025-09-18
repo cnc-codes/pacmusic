@@ -1,4 +1,4 @@
-name: Push Container Registry 🛒
+name: Push Container Registry Image
 
 on:
   push:
@@ -36,3 +36,4 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/pacmusic:${{ github.ref_name }}
             ${{ secrets.DOCKERHUB_USERNAME }}/pacmusic:latest
+            
