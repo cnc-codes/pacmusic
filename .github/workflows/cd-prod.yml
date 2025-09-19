@@ -1,8 +1,12 @@
 name: Deploy Production 
 
+# on:
+#   release:
+#     types: [published]
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - testing
 
 jobs:
   deploy-production:
