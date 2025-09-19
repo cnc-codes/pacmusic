@@ -17,12 +17,6 @@ services:
     profiles:
       - Production
       - Staging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   pacmusic-certbot:
   # ======= Certbot ========
@@ -31,10 +25,9 @@ services:
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
-    command: certonly --webroot -w /var/www/certbot --force-renewal --email ${EMAIL} -d ${DOMAIN} --agree-tos
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email ${EMAIL} -d ${PROD_DOMAIN} -d ${STG_DOMAIN} --agree-tos
     depends_on:
-      - pacmusic-nginx:
-        condition: service_healthy
+      - pacmusic-nginx
     networks:
       - pacmusic-network
     profiles:
@@ -68,8 +61,8 @@ services:
     #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
     #   MINIO_ACCESS_KEY: ${MINIO_STG_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_STG_SECRET_KEY}
-    expose:
-      - 5000
+    ports:
+      - 5001:5000
     networks:
       - pacmusic-network
     profiles:
@@ -84,8 +77,8 @@ services:
     #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
     #   MINIO_ACCESS_KEY: ${MINIO_STG_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_STG_SECRET_KEY}
-    expose:
-      - 5000
+    ports:
+      - 5002:5000
     networks:
       - pacmusic-network
     profiles:
@@ -94,28 +87,34 @@ services:
   pacmusic-prod-1:
   # ======= Production Services ========
 
-    image: "${APP_IMAGE}:${APP_TAG}"
+    # image: "${APP_IMAGE}:${APP_TAG}"
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     container_name: pacmusic-prod-1
     # environment:
     #   MINIO_ENDPOINT: ${MINIO_PROD_ENDPOINT}
     #   MINIO_ACCESS_KEY: ${MINIO_PROD_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_PROD_SECRET_KEY}
-    expose:
-      - 5000
+    ports:
+      - 5003:5000
     networks:
       - pacmusic-network
     profiles:
       - Production
 
   pacmusic-prod-2:
-    image: "${APP_IMAGE}:${APP_TAG}"
+    # image: "${APP_IMAGE}:${APP_TAG}"
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     container_name: pacmusic-prod-2
     # environment:
     #   MINIO_ENDPOINT: ${MINIO_PROD_ENDPOINT}
     #   MINIO_ACCESS_KEY: ${MINIO_PROD_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_PROD_SECRET_KEY}
-    expose:
-      - 5000
+    ports:
+      - 5004:5000
     networks:
       - pacmusic-network
     profiles:
