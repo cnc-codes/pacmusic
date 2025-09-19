@@ -20,7 +20,7 @@ jobs:
           echo "MINIO_ENDPOINT=${{ secrets.MINIO_DEV_ENDPOINT }}" > .env
           echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_DEV_ACCESS_KEY }}" >> .env
           echo "MINIO_SECRET_KEY=${{ secrets.MINIO_DEV_SECRET_KEY }}" >> .env
-          echo "APP_PORT=5000" >> .env
+          echo "APP_PORT=5001" >> .env
           cat .env
 
       - name: Stop Previous Containers

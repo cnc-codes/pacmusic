@@ -50,6 +50,8 @@ jobs:
             echo "MINIO_ENDPOINT=${{ secrets.MINIO_PROD_ENDPOINT }}" >> .env
             echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_PROD_ACCESS_KEY }}" >> .env
             echo "MINIO_SECRET_KEY=${{ secrets.MINIO_PROD_SECRET_KEY }}" >> .env
+            echo "DOMAIN=${{ vars.PROD_DOMAIN }}" >> .env
+            echo "EMAIL=${{ secrets.EMAIL }}" >> .env
             echo "APP_IMAGE=$APP_IMAGE" >> .env
             echo "APP_TAG=$APP_TAG" >> .env
 

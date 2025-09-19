@@ -42,6 +42,8 @@ jobs:
             echo "MINIO_ENDPOINT=${{ secrets.MINIO_STG_ENDPOINT }}" >> .env
             echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_STG_ACCESS_KEY }}" >> .env
             echo "MINIO_SECRET_KEY=${{ secrets.MINIO_STG_SECRET_KEY }}" >> .env
+            echo "DOMAIN=${{ vars.STG_DOMAIN }}" >> .env
+            echo "EMAIL=${{ secrets.EMAIL }}" >> .env
 
             echo "📄 .env content for verification:"
             cat .env
