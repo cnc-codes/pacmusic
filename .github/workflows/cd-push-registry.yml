@@ -1,14 +1,14 @@
 name: Push Container Registry 🛒
 
-on:
-  push:
-    branches:
-      - testing
-      
 # on:
 #   push:
-#     tags:
-#       - '*'   # Trigger when any tag is pushed
+#     branches:
+#       - main
+      
+on:
+  push:
+    tags:
+      - '*'   # Trigger when any tag is pushed
 
 jobs:
   build-push:
