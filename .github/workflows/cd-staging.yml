@@ -69,7 +69,7 @@ jobs:
 
             # 2️⃣ Start app + Nginx + certbot auto-renew
             echo "🚀 Starting app containers and Nginx..."
-            docker compose up --build --profile staging --detach
+            docker compose up --build --profile Staging --detach
 
             # 3️⃣ Wait until all containers are running
             READY=false
