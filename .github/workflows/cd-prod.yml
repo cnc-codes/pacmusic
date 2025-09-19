@@ -6,7 +6,7 @@ name: Deploy Production
 on:
   push:
     branches:
-      - testing
+      - main
 
 jobs:
   deploy-production:
