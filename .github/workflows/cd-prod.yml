@@ -63,7 +63,7 @@ jobs:
 
             # Start production containers + nginx + certbot
             echo "🚀 Starting new containers..."
-            sudo docker compose up --build --detach pacmusic-prod-1 pacmusic-prod-2 pacmusic-nginx pacmusic-certbot certbot-init
+            docker compose up --build --profile production --detach
 
             # Wait until all containers are running
             for i in {1..20}; do
