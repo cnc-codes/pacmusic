@@ -3,7 +3,7 @@ name: Deploy Staging
 on:
   push:
     branches:
-      - testing
+      - main
 
 jobs:
   deploy-staging:
@@ -39,9 +39,9 @@ jobs:
             echo "📄 Create/overwrite .env for Staging"
             echo "APP_STG_PORT_1=${{ vars.APP_STG_PORT_1 }}" > .env
             echo "APP_STG_PORT_2=${{ vars.APP_STG_PORT_2 }}" >> .env
-            echo "MINIO_ENDPOINT=${{ secrets.MINIO_STG_ENDPOINT }}" >> .env
-            echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_STG_ACCESS_KEY }}" >> .env
-            echo "MINIO_SECRET_KEY=${{ secrets.MINIO_STG_SECRET_KEY }}" >> .env
+            # echo "MINIO_ENDPOINT=${{ secrets.MINIO_STG_ENDPOINT }}" >> .env
+            # echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_STG_ACCESS_KEY }}" >> .env
+            # echo "MINIO_SECRET_KEY=${{ secrets.MINIO_STG_SECRET_KEY }}" >> .env
             echo "DOMAIN=${{ vars.STG_DOMAIN }}" >> .env
             echo "EMAIL=${{ secrets.EMAIL }}" >> .env
 
