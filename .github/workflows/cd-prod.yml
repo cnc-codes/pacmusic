@@ -10,11 +10,11 @@ jobs:
     environment: Production
 
     steps:
-      # 1. Checkout repository
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Deploy ke production via SSH
+      # 2️⃣ Deploy ke production via SSH
       - name: Deploy to Production Server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -22,22 +22,25 @@ jobs:
           username: ${{ secrets.SSH_USER_NAME_PRODUCTION }}
           key: ${{ secrets.SSH_PRIVATE_KEY_PRODUCTION }}
           script: |
+            set -euo pipefail
+            IFS=$'\n\t'
+            log() { echo "[$(date +'%H:%M:%S')] $*"; }
+
+            log "📂 Deploying to production server..."
+
             # Variables
             GIT_URL=${{ secrets.GIT_URL }}
             APP_PROD_PATH=${{ vars.APP_PROD_PATH }}
-            APP_PROD_PORT_1=${{ vars.APP_PROD_PORT_1 }}
-            APP_PROD_PORT_2=${{ vars.APP_PROD_PORT_2 }}
             PROD_DOMAIN=${{ vars.PROD_DOMAIN }}
             APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/pacmusic
             APP_TAG=latest
             SSL_PATH=/etc/letsencrypt/live/$PROD_DOMAIN
 
-            echo "📂 Deploying to $APP_PROD_PATH ..."
-
-            # Clone/update repo
+            # Clone/update repository
             if [[ -d "$APP_PROD_PATH/pacmusic/.git" ]]; then
               cd $APP_PROD_PATH/pacmusic
-              git pull --rebase
+              git fetch --all
+              git reset --hard origin/main
             else
               rm -rf $APP_PROD_PATH/pacmusic
               git clone $GIT_URL $APP_PROD_PATH/pacmusic
@@ -45,55 +48,66 @@ jobs:
             fi
 
             # Generate .env
-            echo "APP_PROD_PORT_1=$APP_PROD_PORT_1" > .env
-            echo "APP_PROD_PORT_2=$APP_PROD_PORT_2" >> .env
-            echo "APP_IMAGE=$APP_IMAGE" >> .env
-            echo "APP_TAG=$APP_TAG" >> .env
-            echo "PROD_DOMAIN=$PROD_DOMAIN" >> .env
-            echo "SSL_PATH=$SSL_PATH" >> .env
+            cat > .env <<EOF
+              APP_PROD_PORT_1=${{ vars.APP_PROD_PORT_1 }}
+              APP_PROD_PORT_2=${{ vars.APP_PROD_PORT_2 }}
+              APP_IMAGE=$APP_IMAGE
+              APP_TAG=$APP_TAG
+              PROD_DOMAIN=$PROD_DOMAIN
+              SSL_PATH=$SSL_PATH
+              EOF
 
-            # Pull Docker image
-            echo "🐳 Pulling image $APP_IMAGE:$APP_TAG"
+            # Docker login & pull image
+            log "🐳 Logging in & pulling Docker image..."
             sudo docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
             sudo docker pull $APP_IMAGE:$APP_TAG
 
             # Stop old containers
-            echo "🛑 Stopping old production containers..."
+            log "🛑 Stopping old production containers..."
             sudo docker compose down || true
 
-            # Start production containers + nginx + certbot
-            echo "🚀 Starting new containers..."
-            docker compose up --build --profile production --detach
+            # Ensure SSL exists
+            if [ ! -d "./nginx/ssl/live/$PROD_DOMAIN" ]; then
+              log "🔐 Requesting SSL certificate via Certbot..."
+              sudo docker compose run --rm pacmusic-certbot || true
+            else
+              log "🔐 SSL certificate already exists"
+            fi
 
-            # Wait until all containers are running
-            for i in {1..20}; do
-              READY=true
+            # Start production containers
+            log "🚀 Starting production containers..."
+            COMPOSE_PROFILES=Production sudo docker compose up --build -d
+
+            # Wait for containers to be healthy
+            log "⏳ Waiting for containers to be healthy..."
+            for i in $(seq 1 20); do
+              HEALTHY=true
               for C in pacmusic-prod-1 pacmusic-prod-2 pacmusic-nginx; do
-                STATUS=$(sudo docker inspect -f '{{.State.Running}}' $C)
-                if [ "$STATUS" != "true" ]; then
-                  READY=false
+                STATUS=$(sudo docker inspect -f '{{.State.Health.Status}}' $C 2>/dev/null || echo "none")
+                if [[ "$STATUS" != "healthy" ]]; then
+                  HEALTHY=false
                   break
                 fi
               done
-              if [ "$READY" = "true" ]; then
-                echo "✅ All production containers are running"
+              if [[ "$HEALTHY" == "true" ]]; then
+                log "✅ All production containers are healthy"
                 break
               else
-                echo "⏳ Waiting for containers... ($i/20)"
+                log "⏳ Waiting for containers... ($i/20)"
                 sleep 5
               fi
             done
 
-            if [ "$READY" != "true" ]; then
-              echo "❌ Some production containers failed to start"
+            if [[ "$HEALTHY" != "true" ]]; then
+              log "❌ Some production containers failed health check"
               exit 1
 
-      # 3. Test production endpoint
+      # 3️⃣ Test production endpoint
       - name: Test Production Endpoint
         run: |
           PROD_URL="https://${{ vars.PROD_DOMAIN }}"
           echo "🔗 Testing production endpoint: $PROD_URL"
-          for i in {1..20}; do
+          for i in $(seq 1 20); do
             if curl -f $PROD_URL >/dev/null 2>&1; then
               echo "✅ Production endpoint reachable!"
               exit 0

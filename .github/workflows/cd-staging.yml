@@ -11,11 +11,9 @@ jobs:
     environment: Staging
 
     steps:
-      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Deploy ke staging via SSH
       - name: Deploy to Staging
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -23,93 +21,47 @@ jobs:
           username: ${{ secrets.SSH_USER_NAME_STAGING }}
           key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
           script: |
-            # Variables
+            set -euo pipefail
+            IFS=$'\n\t'
+            log() { echo "[$(date +'%H:%M:%S')] $*"; }
+
+            log "📂 Deploying to staging server..."
+
             GIT_URL=${{ secrets.GIT_URL }}
             APP_STG_PATH=${{ vars.APP_STG_PATH }}
-            APP_STG_PORT_1=${{ vars.APP_STG_PORT_1 }}
-            APP_STG_PORT_2=${{ vars.APP_STG_PORT_2 }}
             STG_DOMAIN=${{ vars.STG_DOMAIN }}
             STG_EMAIL=${{ secrets.EMAIL }}
-            SSL_PATH=/etc/letsencrypt/live/$STG_DOMAIN
             APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/pacmusic
             APP_TAG=latest
 
-            echo "📂 Deploying to $APP_STG_PATH ..."
-
-            # Clone or update repo
             if [[ -d "$APP_STG_PATH/pacmusic/.git" ]]; then
-              cd $APP_STG_PATH/pacmusic
-              git pull --rebase
+              cd $APP_STG_PATH/pacmusic && git fetch --all && git reset --hard origin/main
             else
               rm -rf $APP_STG_PATH/pacmusic
               git clone $GIT_URL $APP_STG_PATH/pacmusic
               cd $APP_STG_PATH/pacmusic
             fi
 
-            # Generate .env
-            echo "APP_STG_PORT_1=$APP_STG_PORT_1" > .env
-            echo "APP_STG_PORT_2=$APP_STG_PORT_2" >> .env
-            echo "STG_DOMAIN=$STG_DOMAIN" >> .env
-            echo "SSL_PATH=$SSL_PATH" >> .env
-            echo "APP_IMAGE=$APP_IMAGE" >> .env
-            echo "APP_TAG=$APP_TAG" >> .env
+            cat > .env <<EOF
+              APP_STG_PORT_1=${{ vars.APP_STG_PORT_1 }}
+              APP_STG_PORT_2=${{ vars.APP_STG_PORT_2 }}
+              STG_DOMAIN=$STG_DOMAIN
+              STG_EMAIL=$STG_EMAIL
+              APP_IMAGE=$APP_IMAGE
+              APP_TAG=$APP_TAG
+              EOF
 
-            # Pull Docker image
-            echo "🐳 Pulling image $APP_IMAGE:$APP_TAG"
+            log "🐳 Pulling Docker image..."
             docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            docker pull $APP_IMAGE:$APP_TAG
+            docker compose pull || docker pull $APP_IMAGE:$APP_TAG
 
-            # Stop old containers
-            echo "🛑 Stopping old containers..."
+            log "🛑 Stopping old containers..."
             docker compose down || true
 
-            # 1️⃣ Run certbot-init to ensure SSL exists
-            echo "🔐 Ensuring SSL certificate exists..."
-            docker compose run --rm pacmusic-certbot || true
-
-            # 2️⃣ Start app + Nginx + certbot auto-renew
-            echo "🚀 Starting app containers and Nginx..."
-            docker compose up --build --profile staging --detach
-
-            # 3️⃣ Wait until all containers are running
-            READY=false
-            for i in $(seq 1 20); do
-              READY=true
-              for C in pacmusic-stg-1 pacmusic-stg-2 pacmusic-nginx; do
-                STATUS=$(docker inspect -f '{{.State.Running}}' $C)
-                if [ "$STATUS" != "true" ]; then
-                  READY=false
-                  break
-                fi
-              done
-
-              if [ "$READY" = "true" ]; then
-                echo "✅ All staging containers are running"
-                break
-              else
-                echo "⏳ Waiting for containers... ($i/20)"
-                sleep 5
-              fi
-            done
-
-            if [ "$READY" != "true" ]; then
-              echo "❌ Some staging containers failed to start"
-              exit 1
+            if [ ! -d "./nginx/ssl/live/$STG_DOMAIN" ]; then
+              log "🔐 Requesting SSL certificate..."
+              docker compose run --rm pacmusic-certbot || true
             fi
 
-      # 3. Test staging endpoint
-      - name: Test Staging Endpoint
-        run: |
-          STG_URL="https://${{ vars.STG_DOMAIN }}"
-          echo "🔗 Testing staging endpoint: $STG_URL"
-          for i in $(seq 1 20); do
-            if curl -f $STG_URL >/dev/null 2>&1; then
-              echo "✅ Staging endpoint reachable!"
-              exit 0
-            else
-              echo "⏳ Waiting for endpoint... ($i/20)"
-              sleep 10
-            fi
-          done
-          echo "❌ Staging endpoint not reachable after multiple attempts"
-          exit 1
+            log "🚀 Starting staging containers..."
+            COMPOSE_PROFILES=Staging docker

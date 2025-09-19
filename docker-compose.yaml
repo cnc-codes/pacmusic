@@ -1,41 +1,25 @@
-# Docker Compose file
-# ======================= DEV CONFIG ============================
-# version: '3'
+version: '3'
 
 services:
 
-# ======================= DEV CONFIG ===========================
+  # ================= DEV CONFIG =================
   pacmusic-dev:
     build:
       context: ./app
       dockerfile: Dockerfile
     container_name: pacmusic-dev
-    # environment:
-    #   MINIO_ENDPOINT: ${MINIO_DEV_ENDPOINT}
-    #   MINIO_ACCESS_KEY: ${MINIO_DEV_ACCESS_KEY}
-    #   MINIO_SECRET_KEY: ${MINIO_DEV_SECRET_KEY}
-    ports:
-      - 5001:5000
     networks:
       - pacmusic-network
     profiles:
       - Development
 
-
-
-# ======================= STG CONFIG ==========================
+  # ================= STAGING CONFIG =================
   pacmusic-stg-1:
     build:
       context: ./app
       dockerfile: Dockerfile
     container_name: pacmusic-stg-1
     restart: unless-stopped
-    # environment:
-    #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
-    #   MINIO_ACCESS_KEY: ${MINIO_STG_ACCESS_KEY}
-    #   MINIO_SECRET_KEY: ${MINIO_STG_SECRET_KEY}
-    ports:
-      - ${APP_STG_PORT_1}:5000
     networks:
       - pacmusic-network
     profiles:
@@ -52,12 +36,6 @@ services:
       dockerfile: Dockerfile
     container_name: pacmusic-stg-2
     restart: unless-stopped
-    # environment:
-    #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
-    #   MINIO_ACCESS_KEY: ${MINIO_STG_ACCESS_KEY}
-    #   MINIO_SECRET_KEY: ${MINIO_STG_SECRET_KEY}
-    ports:
-      - ${APP_STG_PORT_2}:5000
     networks:
       - pacmusic-network
     profiles:
@@ -68,19 +46,11 @@ services:
       timeout: 10s
       retries: 3
 
-
-
-# ======================= PROD CONFIG ===========================
+  # ================= PRODUCTION CONFIG =================
   pacmusic-prod-1:
     image: "${APP_IMAGE}:${APP_TAG}"
     container_name: pacmusic-prod-1
     restart: unless-stopped
-    # environment:
-    #   MINIO_ENDPOINT: ${MINIO_PROD_ENDPOINT}
-    #   MINIO_ACCESS_KEY: ${MINIO_PROD_ACCESS_KEY}
-    #   MINIO_SECRET_KEY: ${MINIO_PROD_SECRET_KEY}
-    ports:
-      - ${APP_PROD_PORT_1}:5000
     networks:
       - pacmusic-network
     profiles:
@@ -95,12 +65,6 @@ services:
     image: "${APP_IMAGE}:${APP_TAG}"
     container_name: pacmusic-prod-2
     restart: unless-stopped
-    # environment:
-    #   MINIO_ENDPOINT: ${MINIO_PROD_ENDPOINT}
-    #   MINIO_ACCESS_KEY: ${MINIO_PROD_ACCESS_KEY}
-    #   MINIO_SECRET_KEY: ${MINIO_PROD_SECRET_KEY}
-    ports:
-      - ${APP_PROD_PORT_2}:5000
     networks:
       - pacmusic-network
     profiles:
@@ -111,9 +75,7 @@ services:
       timeout: 10s
       retries: 3
 
-
-
-# ======================= NGINX CONFIG ===========================
+  # ================= NGINX CONFIG =================
   pacmusic-nginx:
     image: nginx:stable
     container_name: pacmusic-nginx
@@ -123,8 +85,8 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/html:/var/www/certbot:rw           # webroot for certbot http-01 challenges
-      - ./nginx/ssl:/etc/letsencrypt:rw           # certs and live
+      - ./nginx/html:/var/www/certbot:rw
+      - ./nginx/ssl:/etc/letsencrypt:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - pacmusic-stg-1
@@ -137,9 +99,7 @@ services:
       - Production
       - Staging
 
-  # ---------------------------
-  # Certbot: run only when needed to issue/renew certs (manual/CI will exec)
-  # ---------------------------
+  # ================= CERTBOT CONFIG =================
   pacmusic-certbot:
     image: certbot/certbot
     container_name: pacmusic-certbot
@@ -148,19 +108,13 @@ services:
       - ./nginx/html:/var/www/certbot:rw
       - ./nginx/ssl:/etc/letsencrypt:rw
       - ./nginx/ssl/lib:/var/lib/letsencrypt:rw
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email ${EMAIL} --agree-tos -d cnc-code.site -d stg.cnc-code.site --agree-tos
     networks:
       - pacmusic-network
     profiles:
       - Production
       - Staging
-      
-# ======================= NETWORK CONFIG ========================
+
 networks:
   pacmusic-network:
     driver: bridge
-    name: pacmusic-network
-
-# volumes:
-#   minio-dev-vol:
-#     driver: local
-#     name: minio-dev-vol
