@@ -1,9 +1,48 @@
-# version: '3'
-
+# ====== docker-compose.yaml ======
 services:
+  pacmusic-nginx:
+  # ======= Nginx ========
+    container_name: pacmusic-nginx
+    restart: unless-stopped
+    image: nginx:stable
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    networks:
+      - pacmusic-network
+    profiles:
+      - Production
+      - Staging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-# DEV
+  pacmusic-certbot:
+  # ======= Certbot ========
+    container_name: pacmusic-certbot
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email ${EMAIL} -d ${DOMAIN} --agree-tos
+    depends_on:
+      - pacmusic-nginx:
+        condition: service_healthy
+    networks:
+      - pacmusic-network
+    profiles:
+      - Production
+      - Staging
+
   pacmusic-dev:
+  # ======= Devopment Services ========
     build:
       context: ./app
       dockerfile: Dockerfile
@@ -13,45 +52,75 @@ services:
     #   MINIO_ACCESS_KEY: ${MINIO_DEV_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_DEV_SECRET_KEY}
     ports:
-      - 5004:5000
+      - 5001:5000
     networks:
       - pacmusic-network
+    profiles:
+      - Development
 
-# STG
-  pacmusic-stg:
+  pacmusic-stg-1:
+  # ======= Staging Services ========
     build:
       context: ./app
       dockerfile: Dockerfile
-    image: pacmusic-stg:latest
-    container_name: pacmusic-stg
+    container_name: pacmusic-stg-1
     # environment:
     #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
     #   MINIO_ACCESS_KEY: ${MINIO_STG_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_STG_SECRET_KEY}
-    ports:
-      - ${APP_STG_PORT}:5000
+    expose:
+      - 5000
     networks:
       - pacmusic-network
+    profiles:
+      - Staging
 
-# PROD
-  pacmusic-prod:
+  pacmusic-stg-2:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: pacmusic-stg-2
+    # environment:
+    #   MINIO_ENDPOINT: ${MINIO_STG_ENDPOINT}
+    #   MINIO_ACCESS_KEY: ${MINIO_STG_ACCESS_KEY}
+    #   MINIO_SECRET_KEY: ${MINIO_STG_SECRET_KEY}
+    expose:
+      - 5000
+    networks:
+      - pacmusic-network
+    profiles:
+      - Staging
+
+  pacmusic-prod-1:
+  # ======= Production Services ========
+
     image: "${APP_IMAGE}:${APP_TAG}"
-    container_name: pacmusic-prod
+    container_name: pacmusic-prod-1
     # environment:
     #   MINIO_ENDPOINT: ${MINIO_PROD_ENDPOINT}
     #   MINIO_ACCESS_KEY: ${MINIO_PROD_ACCESS_KEY}
     #   MINIO_SECRET_KEY: ${MINIO_PROD_SECRET_KEY}
-    ports:
-      - ${APP_PROD_PORT}:5000
+    expose:
+      - 5000
     networks:
       - pacmusic-network
+    profiles:
+      - Production
+
+  pacmusic-prod-2:
+    image: "${APP_IMAGE}:${APP_TAG}"
+    container_name: pacmusic-prod-2
+    # environment:
+    #   MINIO_ENDPOINT: ${MINIO_PROD_ENDPOINT}
+    #   MINIO_ACCESS_KEY: ${MINIO_PROD_ACCESS_KEY}
+    #   MINIO_SECRET_KEY: ${MINIO_PROD_SECRET_KEY}
+    expose:
+      - 5000
+    networks:
+      - pacmusic-network
+    profiles:
+      - Production
 
 networks:
+# ====== Networks ========
   pacmusic-network:
-    driver: bridge
-    name: pacmusic-network
-
-# volumes:
-#   # minio-dev-vol:
-#   #   driver: local
-#   #   name: minio-dev-vol

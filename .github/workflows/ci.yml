@@ -1,6 +1,5 @@
 name: Dev Testing
 
-# Trigger workflow when a Pull Request is opened to the main branch
 on:
   pull_request:
     branches:
@@ -13,47 +12,41 @@ jobs:
     environment: Development
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Step 2: Setup .env file from secrets (uncomment if needed)
-      # - name: Setup .env
-      #   run: |
-      #     echo "MINIO_ENDPOINT=${{ secrets.MINIO_DEV_ENDPOINT }}" >> .env
-      #     echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_DEV_ACCESS_KEY }}" >> .env
-      #     echo "MINIO_SECRET_KEY=${{ secrets.MINIO_DEV_SECRET_KEY }}" >> .env
-
-      # Step 3: Stop any previous containers and build & run new ones
-      - name: Build and Run Docker Containers
+      - name: Setup .env
         run: |
-          # Ensure no previous container is running
-          sudo docker compose down || true
+          echo "MINIO_ENDPOINT=${{ secrets.MINIO_DEV_ENDPOINT }}" > .env
+          echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_DEV_ACCESS_KEY }}" >> .env
+          echo "MINIO_SECRET_KEY=${{ secrets.MINIO_DEV_SECRET_KEY }}" >> .env
+          echo "APP_PORT=5000" >> .env
+          cat .env
 
-          # Build and run pacmusic-dev service
-          sudo docker compose up --build --detach pacmusic-dev
+      - name: Stop Previous Containers
+        run: sudo docker compose --profile Development down || true
 
-      # Step 4: Wait for pacmusic-dev server to be ready inside container
+      - name: Build and Run Docker Containers
+        run: sudo docker compose --profile Development up --build --detach pacmusic-dev
+
       - name: Wait for pacmusic-dev server
         run: |
           for i in {1..20}; do
-            if sudo docker exec pacmusic-dev curl -f http://localhost:5000; then
+            if curl -f http://localhost:5001 >/dev/null 2>&1; then
               echo "✅ Server is up!"
               break
             else
               echo "⏳ Waiting for server... ($i/20)"
-              sleep 10
+              sleep 5
             fi
           done
 
-      # Step 5: Run automated tests
-      - name: Run Tests
-        run: |
-          export APP_PORT=5004
-          python3 testing/test.py
+      - name: Show container logs
+        run: sudo docker logs pacmusic-dev --tail 20 || true
 
-      # Step 6: Cleanup containers after testing
+      - name: Run Tests
+        run: python3 testing/test.py
+
       - name: Stop Containers
         if: always()
-        run: |
-          sudo docker compose down
+        run: sudo docker compose --profile Development down
