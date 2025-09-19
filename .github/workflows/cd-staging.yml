@@ -65,11 +65,11 @@ jobs:
 
             # 1️⃣ Run certbot-init to ensure SSL exists
             echo "🔐 Ensuring SSL certificate exists..."
-            docker compose run --rm certbot-init || true
+            docker compose run --rm pacmusic-certbot || true
 
             # 2️⃣ Start app + Nginx + certbot auto-renew
             echo "🚀 Starting app containers and Nginx..."
-            docker compose up --build --detach pacmusic-stg-1 pacmusic-stg-2 pacmusic-nginx pacmusic-certbot
+            docker compose up --build --profile staging --detach
 
             # 3️⃣ Wait until all containers are running
             READY=false
